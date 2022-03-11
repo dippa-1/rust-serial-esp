@@ -1,8 +1,10 @@
 use serialport::{available_ports, SerialPortType};
+use std::{time::Duration, io::{self, Write}};
 
 fn main() {
-  let port_name: &str;
-  let baud_rate: u32 = 9600;
+    let mut port_name: String = String::new();
+    let baud_rate: u32 = 9600;
+    let esp_vin: u16 = 0x10c4;
     match available_ports() {
         Ok(ports) => {
             match ports.len() {
@@ -28,8 +30,8 @@ fn main() {
                             "           Product: {}",
                             info.product.as_ref().map_or("", String::as_str)
                         );
-                        if info.vid == 0x1111 {
-                          port_name = p.port_name;
+                        if info.vid == esp_vin {
+                            port_name = p.port_name.clone();
                         }
                     }
                     SerialPortType::BluetoothPort => {
@@ -50,27 +52,30 @@ fn main() {
         }
     }
 
-    let port = serialport::new(port_name, baud_rate)
+    let port = serialport::new(port_name.clone().as_str(), baud_rate)
         .timeout(Duration::from_millis(10))
         .open();
 
     match port {
         Ok(mut port) => {
-            let mut serial_buf: Vec<u8> = vec![0; 1000];
+            let mut read_buffer: Vec<u8> = vec![0; 1000];
             println!("Receiving data on {} at {} baud:", &port_name, &baud_rate);
             loop {
-                match port.read(serial_buf.as_mut_slice()) {
-                    Ok(t) => io::stdout().write_all(&serial_buf[..t]).unwrap(),
+                match port.read(read_buffer.as_mut_slice()) {
+                    Ok(t) => io::stdout().write_all(&read_buffer[..t]).unwrap(),
                     Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
                     Err(e) => eprintln!("{:?}", e),
                 }
+                // match port.write(read_buffer.as_mut_slice()) {
+                //     Ok(t) => io::stdout().write_all(&read_buffer[..t]).unwrap(),
+                //     Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
+                //     Err(e) => eprintln!("{:?}", e),
+                // }
             }
         }
         Err(e) => {
             eprintln!("Failed to open \"{}\". Error: {}", port_name, e);
             ::std::process::exit(1);
         }
-      }
-        
-
+    }
 }
